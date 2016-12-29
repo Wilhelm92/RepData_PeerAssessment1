@@ -1,0 +1,144 @@
+---
+title: 'Reproducible Research: Peer Assessment 1'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Loading and Preprocessing the data
+```{r}
+rm(list=ls())
+library(dplyr)
+library(ggplot2)
+setwd("C:/Users/Usuario 2/Dropbox/Coursera/Data Science/Reproductible Research")
+activity <- read.csv("activity.csv",header = T)
+```
+First, we specify the working directory and the libraries that we're going to use, and then, we just load the data, specifying that the first line correspond to the header. In this case, no other processing to the data is needed. 
+
+##What is mean total number of steps taken per day?
+
+In order to answer that questiont, first, we get the total number of steps taken each day
+```{r}
+StepsEachDay <- summarise(group_by(activity,date),sum(steps))
+names(StepsEachDay)=c("date","steps")
+```
+&nbsp;
+
+Then, we plot the histogram and get the mean and median of the total number of steps taken each day
+```{r}
+with(StepsEachDay,hist(steps, xlab="Steps", main="Total number of steps taken each day"))
+summary(StepsEachDay$steps)
+```
+As, we can see, the Median is equal to 10,760 and the Mean is equal to 10,770. That the Median and the Mean be similar, it's a hint, that his distribution is symmetric.
+
+
+##What is the average daily activity pattern?
+
+First, we get the mean of each interval across all days
+```{r}
+MeanStepsPerDay<-  summarise(group_by(activity,interval),mean(steps,na.rm = TRUE))
+names(MeanStepsPerDay)=c("interval","steps")
+```
+
+Then, we get the time series plot, and add a vertical line, that indicates, the interval, that in average, has the maximum value of steps.
+```{r}
+with(MeanStepsPerDay,plot(interval,steps, ylab="Steps", type="l"))
+abline(v=835,col="red",lty=2)
+m <- max(MeanStepsPerDay$steps)
+filter(MeanStepsPerDay,steps==m)
+```
+Therefore, the interval, that in average, has the maximum value of steps, is the **835** with a value of **206**
+steps.
+
+##Imputing missing values
+
+```{r}
+MissinValues <- table(is.na(activity$steps))
+MissinValues
+```
+We see, that in the dataset, are 2304 of missing values
+```{r}
+MissinValues[2]/length(activity$steps)
+```
+Aprox 13.11% of the total values. So, it's a relative small number of missing values.  
+&nbsp;
+
+In order to propose a strategy,not sophisticated, to fill all that missing values, we can consider the mean or the median, the problem that can appear with the mean, is that, if there exist outliers, the median doesn't reflect the real behavior of the data. So, we are going to consider the median.  
+&nbsp;
+
+The median that we've obtained, is the corresponding to the total steps taken each day, so, that value we divided it into the number of intervals per day.
+```{r}
+Imput <- summary(StepsEachDay$steps)[[3]]/length(unique(activity$interval))
+```
+&nbsp;
+
+Then, we create a new dataset where we include the imputed values
+```{r}
+ActivityWithOutNA<-activity
+for(i in 1:length(activity$steps)){
+  if(is.na(ActivityWithOutNA$steps[i])){
+    ActivityWithOutNA$steps[i] = Imput
+  }
+}
+```
+
+Then, we compare the histrogram's thar correspond to the data with missing values and the data without missing values
+```{r}
+
+StepsEachDayWONA <- summarise(group_by(ActivityWithOutNA,date),sum(steps))
+names(StepsEachDayWONA)=c("date","steps")
+par(mfrow=c(1,2),oma=c(0,0,1,0))
+with(StepsEachDay,hist(steps, xlab="Steps", main="with NA's",ylim = c(0,35)))
+abline(h=10,col="red",lty=2)
+with(StepsEachDayWONA,hist(steps, xlab="Steps", main="without NA's"))
+abline(h=10,col="red",lty=2)
+title(main = "Steps taken each day",outer = TRUE)
+```
+We can see, that the number of steps is more centralized around the median in the data without missing values.
+```{r}
+summary(StepsEachDayWONA$steps)
+summary(StepsEachDay$steps)
+```
+We see than the Median and the Mean doesn´t differ, but, in the histogram´s, we see that the interval, that have the median of no na's, has a bigger frequency than the corresponding to the data with na's.  
+$nbsp;
+
+The median and mean corresponding to the data without NA's is **10,769** and **10,770**, the same for the data with NA's, but we can see in the *1st Qu.*, that is more centralized in the case where we imput data for NA's. 
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+Fisr we create the new variable
+```{r}
+Days <- weekdays(as.Date(ActivityWithOutNA$date),abbreviate = TRUE)
+FD <- rep(0,length(Days))
+for(i in 1:length(Days)){
+  
+  if(Days[i]=="sá."){
+    FD[i]=1
+  }
+  else if(Days[i]=="do.")
+  {FD[i]=1}
+  else{FD[i=0]}
+}
+
+DaysFactor <- factor(FD,labels=c("WeekDay","WeekendDay"))
+ActivityWithOutNA['DaysFactor']=DaysFactor
+```
+
+And then we search in the plot's if there is a difference in activity patterns betwwen weekdays and weekends
+
+```{r}
+WeekDays <- subset(ActivityWithOutNA,DaysFactor=="WeekDay")
+WeekendDays <- subset(ActivityWithOutNA,DaysFactor=="WeekendDay")
+MeanWeekDays <- summarise(group_by(WeekDays,interval),mean(steps))
+MeanWeekendDays <- summarise(group_by(WeekendDays,interval),mean(steps))
+MeanWeekDays["Day"]="WeekDay"
+MeanWeekendDays["Day"]="WeekendDay"
+names(MeanWeekDays)=c("interval","steps","Day")
+names(MeanWeekendDays)=c("interval","steps","Day")
+Means <- rbind(MeanWeekDays,MeanWeekendDays)
+
+qplot(data=Means,interval,steps,facets = Day~.,geom = "line")
+```
+It seems, that in Weekends, the actitvity is more constant, in the sens, that the numbers of steps almos in all the intervals are between 25 and 150. In the case of WeekDays, is clearly a period of more activity.
